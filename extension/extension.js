@@ -165,50 +165,42 @@ export default class CarmentaExtension extends Extension {
   }
 
   InsertText(text) {
-    console.log(`Carmenta: Injecting text '${text}'`);
+    if (!this._lastFocusedWindow) {
+      this._copyToClipboard(text);
+      return;
+    }
 
-    if (this._lastFocusedWindow) {
-      // activate target
+    const clipboard = St.Clipboard.get_default();
+    
+    // 1. Capture original text (asynchronous)
+    clipboard.get_text(St.ClipboardType.CLIPBOARD, (cb, oldText) => {
+      // 2. Set emoji and activate target immediately
+      this._copyToClipboard(text);
       this._lastFocusedWindow.activate(global.get_current_time());
-
-      // copy and paste
+      
+      // 3. Send Ctrl+V immediately
+      this._sendCtrlV();
+      
+      // 4. Single short delay to allow the app to "read" the emoji 
+      // before we revert the clipboard and return focus.
       if (this._insertTimeoutId) {
         GLib.Source.remove(this._insertTimeoutId);
-        this._insertTimeoutId = null;
       }
 
-      this._insertTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
-        this._copyToClipboard(text);
-        this._sendCtrlV();
-        this._insertTimeoutId = null;
-
-        // return focus to carmenta
-        if (this._focusTimeoutId) {
-          GLib.Source.remove(this._focusTimeoutId);
-          this._focusTimeoutId = null;
+      this._insertTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
+        if (oldText !== null) {
+          this._copyToClipboard(oldText);
         }
-
-        this._focusTimeoutId = GLib.timeout_add(
-          GLib.PRIORITY_DEFAULT,
-          10,
-          () => {
-            let carmentaWin = this._findCarmentaWindow();
-            if (carmentaWin) {
-              carmentaWin.activate(global.get_current_time());
-              carmentaWin.make_above();
-              console.log("Carmenta: Focus returned");
-            }
-            this._focusTimeoutId = null;
-            return GLib.SOURCE_REMOVE;
-          },
-        );
-
+        
+        let carmentaWin = this._findCarmentaWindow();
+        if (carmentaWin) {
+          carmentaWin.activate(global.get_current_time());
+          carmentaWin.make_above();
+        }
+        this._insertTimeoutId = null;
         return GLib.SOURCE_REMOVE;
       });
-    } else {
-      console.log("Carmenta: No last focused window found");
-      this._copyToClipboard(text);
-    }
+    });
   }
 
   _findCarmentaWindow() {

@@ -6,7 +6,6 @@ use gtk4::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::dbus::DBusClient;
 use super::kaomoji_data::{KaomojiObject, KaomojiCategory, get_all_kaomojis};
 
 pub fn create_kaomoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
@@ -116,14 +115,12 @@ pub fn create_kaomoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
          let item = item.downcast_ref::<gtk4::ListItem>().unwrap();
          let button = gtk4::Button::builder().css_classes(["kaomoji-btn", "flat"]).build(); // New class
          item.set_child(Some(&button));
+         
+         // Left Click (Primary)
          button.connect_clicked(move |btn| {
              let text = btn.label().unwrap_or_default().to_string();
-             
-             // History + Insertion Logic
-             crate::app::mark_inserting();
-             crate::history::add_recent(text.clone());
-             
-             DBusClient::insert_or_copy(&text);
+             let also_quit = !crate::app::is_shift_pressed();
+             crate::app::action_helper(text, false, also_quit);
          });
     });
 
@@ -142,6 +139,8 @@ pub fn create_kaomoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
         .min_columns(2)
         .enable_rubberband(false)
         .build();
+
+    grid_view.grab_focus();
 
     let scrolled = ScrolledWindow::builder()
         .child(&grid_view)

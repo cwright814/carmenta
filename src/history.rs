@@ -57,6 +57,10 @@ impl History {
         }
         self.save();
     }
+    pub fn clear(&mut self) {
+        self.recent.clear();
+        self.save();
+    }
 }
 
 // Global history instance
@@ -71,6 +75,13 @@ pub fn add_recent(emoji: String) {
         h.borrow_mut().add(emoji);
     });
     // Notify all registered callbacks
+    notify_history_changed();
+}
+
+pub fn clear_recent() {
+    GLOBAL_HISTORY.with(|h| {
+        h.borrow_mut().clear();
+    });
     notify_history_changed();
 }
 

@@ -12,12 +12,44 @@ pub struct CarmentaWindow {
 
 impl CarmentaWindow {
     pub fn new(app: &Application, config: &AppConfig) -> Self {
+        // Load CSS
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_data("
+            .emoji-grid-page .emoji-btn {
+                font-size: 24px;
+                padding: 0;
+                margin: 0;
+            }
+            .emoji-grid-page .emoji-btn label {
+                padding: 0;
+                margin: 0;
+            }
+            .category-btn {
+                font-size: 24px;
+                padding: 6px;
+            }
+        ");
+        gtk4::style_context_add_provider_for_display(
+            &gtk4::gdk::Display::default().expect("Could not connect to a display."),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+
         // Menu
         let menu = gio::Menu::new();
+        menu.append(Some("Clear Recent"), Some("app.clear_recent"));
         menu.append(Some("About Carmenta"), Some("app.about"));
         menu.append(Some("Quit"), Some("app.quit"));
 
         // Actions (App Scope)
+        if !app.has_action("clear_recent") {
+            let action_clear = gio::SimpleAction::new("clear_recent", None);
+            action_clear.connect_activate(|_, _| {
+                crate::history::clear_recent();
+            });
+            app.add_action(&action_clear);
+        }
+
         if !app.has_action("about") {
             let action_about = gio::SimpleAction::new("about", None);
             action_about.connect_activate(|_, _| {
@@ -158,7 +190,8 @@ impl CarmentaWindow {
                         }
 
                         let is_inserting = crate::app::IS_INSERTING.with(|f| *f.borrow());
-                        if is_inserting {
+                        let is_popover_open = crate::app::is_popover_open();
+                        if is_inserting || is_popover_open {
                             return glib::ControlFlow::Continue;
                         }
 
@@ -174,7 +207,7 @@ impl CarmentaWindow {
             }
         ));
 
-        // Escape Key handler
+        // Escape Key handler & Shift tracker
         let key_controller = gtk4::EventControllerKey::new();
         key_controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
         let app_weak_key = app.downgrade();
@@ -185,7 +218,15 @@ impl CarmentaWindow {
                 }
                 return glib::Propagation::Stop;
             }
+            if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
+                crate::app::set_shift_pressed(true);
+            }
             glib::Propagation::Proceed
+        });
+        key_controller.connect_key_released(move |_, key, _, _| {
+            if key == gtk4::gdk::Key::Shift_L || key == gtk4::gdk::Key::Shift_R {
+                crate::app::set_shift_pressed(false);
+            }
         });
         window.add_controller(key_controller);
 

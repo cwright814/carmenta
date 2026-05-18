@@ -5,22 +5,13 @@ use gtk4::{
     CustomFilter, FilterListModel, Popover
 };
 use super::emoji_data::{EmojiCategory, EmojiObject, get_all_emojis};
-use crate::dbus::DBusClient;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-// helper function: Insert text & manage history/focus
-fn insert_helper(text: String) {
-     crate::app::mark_inserting();
-     crate::history::add_recent(text.clone());
-     
-     DBusClient::insert_or_copy(&text);
-}
 
 pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
     // Top container: Categories + Grid
     let container = Box::new(Orientation::Horizontal, 0);
-    container.set_css_classes(&["emoji-page"]);
+    container.set_css_classes(&["emoji-grid-page"]);
 
     // 1. Sidebar (Categories)
     let sidebar = Box::new(Orientation::Vertical, 6);
@@ -82,7 +73,7 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
     });
 
     // Filter Logic
-    let current_category = Rc::new(RefCell::new(EmojiCategory::SmileysAndPeople));
+    let current_category = Rc::new(RefCell::new(EmojiCategory::Recent));
     let current_query = Rc::new(RefCell::new(String::new()));
 
     let filter = CustomFilter::new(glib::clone!(#[strong] current_category, #[strong] current_query, move |obj| {
@@ -170,7 +161,7 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
             btn.set_group(Some(first));
         }
 
-        if cat_val == EmojiCategory::SmileysAndPeople {
+        if cat_val == EmojiCategory::Recent {
              btn.set_active(true);
         } 
 
@@ -195,7 +186,8 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
          // Left Click (Primary)
          button.connect_clicked(move |btn| {
              let text = btn.label().unwrap_or_default().to_string();
-             insert_helper(text);
+             let also_quit = !crate::app::is_shift_pressed();
+             crate::app::action_helper(text, false, also_quit);
          });
 
          // Right Click (Secondary) - Skin Tones
@@ -214,6 +206,13 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
                  if let Some(variants) = emoji_data.skin_tones() {
                      // Create Popover
                      let popover = Popover::builder().child(&Box::new(Orientation::Horizontal, 5)).build();
+                     
+                     // Track popover state
+                     crate::app::set_popover_open(true);
+                     popover.connect_closed(|_| {
+                         crate::app::set_popover_open(false);
+                     });
+
                      let container = popover.child().unwrap().downcast::<Box>().unwrap();
                      container.set_margin_top(5);
                      container.set_margin_bottom(5);
@@ -229,10 +228,14 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
                          
                          let v_text = variant.as_str().to_string();
                          let pop_clone = popover.clone();
-                         v_btn.connect_clicked(move |_| {
-                             insert_helper(v_text.clone());
+                         
+                         // Left click on variant -> Append
+                         v_btn.connect_clicked(glib::clone!(#[strong] v_text, #[strong] pop_clone, move |_| {
+                             let also_quit = !crate::app::is_shift_pressed();
+                             crate::app::action_helper(v_text.clone(), false, also_quit);
                              pop_clone.popdown();
-                         });
+                         }));
+
                          container.append(&v_btn);
                      }
                      
@@ -258,6 +261,8 @@ pub fn create_emoji_grid(search_entry: &gtk4::SearchEntry) -> Box {
         .max_columns(8)
         .min_columns(5)
         .build();
+
+    grid_view.grab_focus();
 
     let scrolled_window = ScrolledWindow::builder()
         .hscrollbar_policy(PolicyType::Never)

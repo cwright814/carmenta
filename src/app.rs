@@ -6,12 +6,46 @@ use gtk4::prelude::*;
 use gtk4::Application as GtkApplication;
 use libadwaita::Application;
 use std::cell::RefCell;
+use crate::dbus::DBusClient;
 
 // Global state to track insertion
 thread_local! {
     pub static IS_INSERTING: RefCell<bool> = RefCell::new(false);
+    pub static IS_SHIFT_PRESSED: RefCell<bool> = RefCell::new(false);
+    pub static IS_POPOVER_OPEN: RefCell<bool> = RefCell::new(false);
     static INSERT_TIMER: RefCell<Option<glib::SourceId>> = RefCell::new(None);
     static QUIT_REQUESTED: RefCell<bool> = RefCell::new(false);
+}
+
+pub fn set_popover_open(open: bool) {
+    IS_POPOVER_OPEN.with(|f| *f.borrow_mut() = open);
+}
+
+pub fn is_popover_open() -> bool {
+    IS_POPOVER_OPEN.with(|f| *f.borrow())
+}
+
+pub fn action_helper(text: String, is_copy: bool, also_quit: bool) {
+     mark_inserting();
+     crate::history::add_recent(text.clone());
+
+     if is_copy {
+         DBusClient::copy_text(&text);
+     } else {
+         DBusClient::insert_text(&text);
+     }
+
+     if also_quit {
+         request_default_quit();
+     }
+}
+
+pub fn set_shift_pressed(pressed: bool) {
+    IS_SHIFT_PRESSED.with(|f| *f.borrow_mut() = pressed);
+}
+
+pub fn is_shift_pressed() -> bool {
+    IS_SHIFT_PRESSED.with(|f| *f.borrow())
 }
 
 pub fn mark_inserting() {

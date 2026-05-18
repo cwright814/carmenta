@@ -4,16 +4,9 @@ use gtk4::{
     PolicyType, ScrolledWindow, Box, Orientation, Spinner
 };
 use super::gif_data::{GifObject, search_gifs, get_trending_gifs};
-use crate::dbus::DBusClient;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::SystemTime;
-
-// helper function: copy URL and insert via extension
-fn insert_gif_url(url: String) {
-    crate::app::mark_inserting();
-    DBusClient::insert_or_copy(&url);
-}
 
 // helper to run async code on tokio runtime and return result to GTK main loop
 fn spawn_tokio<F, T>(future: F, callback: impl FnOnce(T) + 'static)
@@ -86,7 +79,8 @@ pub fn create_gif_grid(search_entry: &gtk4::SearchEntry) -> Box {
             // url from widget name
             let url = btn.widget_name();
             if !url.is_empty() {
-                insert_gif_url(url.to_string());
+                let also_quit = !crate::app::is_shift_pressed();
+                crate::app::action_helper(url.to_string(), false, also_quit);
             }
         });
     });

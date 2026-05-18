@@ -21,40 +21,34 @@ impl DBusClient {
         }
     }
 
-    pub fn insert_or_copy(text: &str) {
+    pub fn insert_text(text: &str) {
         let text_owned = text.to_string();
         if let Some(rt) = crate::RUNTIME.get() {
             rt.spawn(async move {
-                // wrap the extension call with a timeout
                 let result = tokio::time::timeout(
                     DBUS_TIMEOUT,
                     Self::try_insert_via_extension(&text_owned)
                 ).await;
                 
                 match result {
-                    Ok(Ok(_)) => {}, // success
+                    Ok(Ok(_)) => {
+                        // success
+                    },
                     Ok(Err(e)) => {
                         eprintln!("DBus error: {}", e);
-                        Self::fallback_copy_and_quit(text_owned);
                     }
                     Err(_) => {
                         eprintln!("DBus timeout: extension did not respond in {:?}", DBUS_TIMEOUT);
-                        Self::fallback_copy_and_quit(text_owned);
                     }
                 }
             });
-        } else {
-            eprintln!("Runtime not initialized!");
         }
     }
-    
-    fn fallback_copy_and_quit(text: String) {
+
+    pub fn copy_text(text: &str) {
+        let text_owned = text.to_string();
         gtk4::glib::MainContext::default().invoke(move || {
-            Self::copy_to_clipboard(&text);
-            gtk4::glib::timeout_add_local_once(
-                Duration::from_millis(100),
-                || crate::app::request_default_quit()
-            );
+            Self::copy_to_clipboard(&text_owned);
         });
     }
 
