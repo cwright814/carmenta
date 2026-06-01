@@ -1,5 +1,5 @@
 Name:           carmenta
-Version:        0.3.1
+Version:        99.99.99
 Release:        1%{?dist}
 Summary:        A GTK4 Emoji Picker for GNOME
 
